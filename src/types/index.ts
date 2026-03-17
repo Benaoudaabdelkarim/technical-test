@@ -1,5 +1,5 @@
 export interface Commentaire {
-  id: number
+  id: string | number
   auteur: string
   date: string // ISO 8601
   contenu: string

@@ -16,11 +16,13 @@ export const ApiService = {
     const transformedParams: Record<string, unknown> = { ...params }
 
     // JSON Server v1.0+ compatibility
+    // If we have _limit, convert it to _per_page and delete _limit
     if (transformedParams._limit) {
       transformedParams._per_page = transformedParams._limit
       delete transformedParams._limit
     }
 
+    // If we have _sort and _order, convert it to the new -key format and delete _order
     if (transformedParams._sort) {
       if (transformedParams._order === 'desc') {
         transformedParams._sort = `-${transformedParams._sort}`
@@ -32,15 +34,19 @@ export const ApiService = {
 
     // Handle both array (v0.x) and object (v1.x) responses
     if (Array.isArray(response.data)) {
+      const data = response.data as Candidature[]
+      // In v0.x, total is in x-total-count header
+      // In v1.x unpaginated, it's just the length
+      const totalHeader = response.headers['x-total-count']
       return {
-        data: response.data as Candidature[],
-        total: parseInt(response.headers['x-total-count'] || '0', 10),
+        data: data,
+        total: totalHeader ? parseInt(totalHeader, 10) : data.length,
       }
     } else if (response.data && typeof response.data === 'object' && 'data' in response.data) {
       const dataObj = response.data as { data: Candidature[]; items?: number }
       return {
         data: dataObj.data,
-        total: dataObj.items || 0,
+        total: dataObj.items || dataObj.data.length || 0,
       }
     }
 
