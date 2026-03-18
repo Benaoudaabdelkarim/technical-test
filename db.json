@@ -326,6 +326,12 @@
           "auteur": "Marie Recruteuse",
           "date": "2026-03-17T12:37:00.057Z",
           "contenu": "aa"
+        },
+        {
+          "id": 1773824671843,
+          "auteur": "Marie Recruteuse",
+          "date": "2026-03-18T09:04:31.843Z",
+          "contenu": "test"
         }
       ]
     },
@@ -444,6 +450,12 @@
       "titre": "Développeur Frontend",
       "description": "Développeur Frontend",
       "competencesRequises": []
+    },
+    {
+      "id": "394f",
+      "titre": "Développeur Devops",
+      "description": "test description",
+      "competencesRequises": []
     }
   ],
   "competences": [
@@ -501,6 +513,11 @@
       "id": "986b",
       "nom": "Nginx",
       "categorie": "DevOps"
+    },
+    {
+      "id": "4b0c",
+      "nom": "Angular",
+      "categorie": "Frontend"
     }
   ],
   "$schema": "./node_modules/json-server/schema.json"
