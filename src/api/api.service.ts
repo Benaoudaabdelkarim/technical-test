@@ -1,8 +1,16 @@
 import axios from 'axios'
 import type { Candidature, Statut, Poste, Competence, ApiParams } from '@/types'
 
+/**
+ * Configuration de l'URL de base pour l'API mockée (JSON Server).
+ * On utilise localhost:3000 par défaut.
+ */
 const API_BASE_URL = 'http://localhost:3000'
 
+/**
+ * Instance Axios centralisée pour gérer les appels API.
+ * Permet d'ajouter facilement des intercepteurs ou des headers globaux plus tard.
+ */
 const client = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -10,19 +18,29 @@ const client = axios.create({
   },
 })
 
+/**
+ * Service gérant toutes les interactions avec l'API REST.
+ * J'ai encapsulé ici la logique de transformation des paramètres pour JSON Server.
+ */
 export const ApiService = {
-  // Candidatures
+  // --- SECTION : CANDIDATURES ---
+
+  /**
+   * Récupère la liste des candidatures avec support de la pagination, du tri et des filtres.
+   * J'ai ajouté une logique pour être compatible avec JSON Server v0.x et v1.x (beta).
+   */
   async getCandidatures(params: ApiParams = {}) {
     const transformedParams: Record<string, unknown> = { ...params }
 
-    // JSON Server v1.0+ compatibility
-    // If we have _limit, convert it to _per_page and delete _limit
+    // Adaptation pour JSON Server v1.0+ :
+    // Ils ont changé _limit par _per_page. Je gère les deux pour plus de sécurité.
     if (transformedParams._limit) {
       transformedParams._per_page = transformedParams._limit
       delete transformedParams._limit
     }
 
-    // If we have _sort and _order, convert it to the new -key format and delete _order
+    // Gestion du tri (ex: dateCandidature desc) :
+    // Le format a changé pour devenir '-key' pour le décroissant dans les versions récentes.
     if (transformedParams._sort) {
       if (transformedParams._order === 'desc') {
         transformedParams._sort = `-${transformedParams._sort}`
@@ -32,11 +50,11 @@ export const ApiService = {
 
     const response = await client.get<unknown>('/candidatures', { params: transformedParams })
 
-    // Handle both array (v0.x) and object (v1.x) responses
+    // Normalisation de la réponse :
+    // JSON Server v0 renvoie un tableau, v1 renvoie un objet avec une clé 'data'.
     if (Array.isArray(response.data)) {
       const data = response.data as Candidature[]
-      // In v0.x, total is in x-total-count header
-      // In v1.x unpaginated, it's just the length
+      // Le total est souvent dans un header personnalisé 'x-total-count'.
       const totalHeader = response.headers['x-total-count']
       return {
         data: data,
@@ -53,21 +71,32 @@ export const ApiService = {
     return { data: [], total: 0 }
   },
 
+  /**
+   * Récupère un candidat spécifique par son ID.
+   * On inclut les commentaires via '_embed' pour éviter de faire deux requêtes.
+   */
   async getCandidatureById(id: number) {
     const response = await client.get<Candidature>(`/candidatures/${id}?_embed=commentaires`)
     return response.data
   },
 
+  /**
+   * Met à jour partiellement un candidat (ex: changement de statut).
+   */
   async updateCandidature(id: number, data: Partial<Candidature>) {
     const response = await client.patch<Candidature>(`/candidatures/${id}`, data)
     return response.data
   },
 
+  /**
+   * Supprime une candidature du système.
+   */
   async deleteCandidature(id: number) {
     await client.delete(`/candidatures/${id}`)
   },
 
-  // Statuts, Postes, Competences
+  // --- SECTION : CONFIGURATION (Statuts, Postes, Compétences) ---
+
   async getStatuts() {
     const response = await client.get<Statut[]>('/statuts')
     return response.data

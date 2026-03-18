@@ -1,9 +1,14 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import type { Candidature, Statut, Poste, Competence, ApiParams } from '@/types'
 import { ApiService } from '@/api/api.service'
 
+/**
+ * Store principal pour la gestion des candidatures.
+ * Utilise l'API Composition de Pinia pour une meilleure lisibilité.
+ */
 export const useCandidatureStore = defineStore('candidature', () => {
+  // --- ÉTAT (STATE) ---
   const candidatures = ref<Candidature[]>([])
   const totalCandidatures = ref(0)
   const statuts = ref<Statut[]>([])
@@ -12,6 +17,7 @@ export const useCandidatureStore = defineStore('candidature', () => {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
+  // Paramètres de filtrage par défaut
   const filters = ref<ApiParams>({
     _page: 1,
     _limit: 10,
@@ -22,24 +28,27 @@ export const useCandidatureStore = defineStore('candidature', () => {
     poste: '',
   })
 
+  // --- ACTIONS ---
+
+  /**
+   * Charge les candidatures depuis le serveur en appliquant les filtres actifs.
+   * Inclus une logique de secours (fallback) pour la recherche plein texte si le serveur
+   * ne supporte pas bien le paramètre 'q'.
+   */
   const fetchCandidatures = async () => {
     isLoading.value = true
     error.value = null
     try {
-      // Create clean filters for the API
+      // On nettoie les filtres pour ne pas envoyer de valeurs vides à l'API
       const cleanFilters = Object.fromEntries(
         Object.entries(filters.value).filter(([_, v]) => v !== '' && v !== null),
       )
 
-      // Get data from API
-      // Note: If q is broken in the backend (json-server v1.0 beta),
-      // it might return 0 results or ignore it.
       let { data, total } = await ApiService.getCandidatures(cleanFilters)
 
-      // Client-side search fallback
-      // If q is present, we check if the results are actually filtered.
-      // If the server ignored q, it will return more items than expected.
-      // If the server doesn't support q, we might want to fetch without q and filter here.
+      // Fallback client-side search :
+      // Si on a une requête 'q' mais que le serveur semble l'avoir ignorée (retourne trop de données),
+      // on filtre manuellement côté client pour garantir une expérience utilisateur cohérente.
       if (filters.value.q) {
         const query = filters.value.q.toLowerCase()
         const filtered = data.filter(
@@ -49,16 +58,11 @@ export const useCandidatureStore = defineStore('candidature', () => {
             c.competences.some((comp) => comp.toLowerCase().includes(query)),
         )
 
-        // If the server ignored the q filter (returned unfiltered data),
-        // we use our filtered version.
         if (filtered.length < data.length) {
           data = filtered
           total = filtered.length
-        }
-        // If the server returned 0 results but we have q,
-        // it might be because q is broken in the backend.
-        else if (data.length === 0) {
-          // Optional: Retry without q and filter client-side
+        } else if (data.length === 0) {
+          // Si 0 résultat, on tente une récupération globale et on filtre nous-mêmes
           const filtersWithoutQ = { ...cleanFilters }
           delete filtersWithoutQ.q
           const retry = await ApiService.getCandidatures(filtersWithoutQ)
@@ -83,6 +87,9 @@ export const useCandidatureStore = defineStore('candidature', () => {
     }
   }
 
+  /**
+   * Charge les données de configuration (postes, statuts, compétences) en parallèle.
+   */
   const fetchMetadata = async () => {
     try {
       const [s, p, c] = await Promise.all([
@@ -94,14 +101,20 @@ export const useCandidatureStore = defineStore('candidature', () => {
       postes.value = p
       competences.value = c
     } catch (err) {
-      console.error('Failed to fetch metadata', err)
+      console.error('Échec lors du chargement des métadonnées', err)
     }
   }
 
+  /**
+   * Met à jour le statut d'une candidature.
+   * On utilise ici une "mise à jour optimiste" pour que l'UI réagisse instantanément,
+   * puis on annule si l'appel API échoue.
+   */
   const updateCandidatureStatus = async (id: number, newStatut: string) => {
-    // Optimistic update
     const originalCandidatures = [...candidatures.value]
     const index = candidatures.value.findIndex((c) => String(c.id) === String(id))
+
+    // Modification immédiate dans le store (UI réactive)
     if (index !== -1 && candidatures.value[index]) {
       candidatures.value[index].statut = newStatut
     }
@@ -109,11 +122,16 @@ export const useCandidatureStore = defineStore('candidature', () => {
     try {
       await ApiService.updateCandidature(id, { statut: newStatut })
     } catch (err) {
+      // Rollback en cas d'erreur
       candidatures.value = originalCandidatures
-      error.value = 'Échec de la mise à jour du statut'
+      error.value = 'Échec de la mise à jour du statut sur le serveur'
     }
   }
 
+  /**
+   * Met à jour un filtre et déclenche une nouvelle recherche.
+   * Remet automatiquement à la page 1 si un filtre métier change.
+   */
   const setFilter = (key: keyof ApiParams, value: string | number | null | undefined) => {
     filters.value[key] = value as never
     if (key !== '_page') {
